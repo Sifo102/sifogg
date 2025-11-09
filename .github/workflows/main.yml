@@ -13,32 +13,84 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
           netsh advfirewall firewall set rule group="remote desktop" new enable=Yes
           Restart-Service -Name TermService -Force
+          Write-Host "✅ RDP configured successfully"
 
       - name: Create User Account
         run: |
-          $password = "Sifodz@2024!"
+          # استخدام كلمة سر بسيطة وتلبي متطلبات Windows
+          $password = "P@ssw0rd123"
           $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+          
+          # حذف المستخدم إذا موجود
           Remove-LocalUser -Name "SIFODZ" -ErrorAction SilentlyContinue
-          Start-Sleep -Seconds 2
+          Start-Sleep -Seconds 3
+          
+          # إنشاء المستخدم
           New-LocalUser -Name "SIFODZ" -Password $securePass -AccountNeverExpires
+          
+          # إضافة إلى المجموعات المطلوبة
           Add-LocalGroupMember -Group "Administrators" -Member "SIFODZ"
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "SIFODZ"
+          
+          # تفعيل الحساب
           Enable-LocalUser -Name "SIFODZ"
-          echo "RDP_CREDS=User: SIFODZ | Password: $password" >> $env:GITHUB_ENV
+          
+          echo "RDP_USER=SIFODZ" >> $env:GITHUB_ENV
+          echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
+          Write-Host "✅ User account created successfully"
 
-      - name: Get Connection Info
+      - name: Get Network Information
         run: |
-          $ip = Invoke-RestMethod -Uri "https://api.ipify.org" -TimeoutSec 10
-          echo "PUBLIC_IP=$ip" >> $env:GITHUB_ENV
-          Write-Host "✅ RDP Ready - IP: $ip - Username: SIFODZ - Password: Sifodz@2024!"
+          # الحصول على معلومات الشبكة
+          $ipConfig = ipconfig
+          Write-Host "Network Configuration:"
+          Write-Host $ipConfig
+          
+          # محاولة الحصول على IP عام
+          try {
+              $publicIP = Invoke-RestMethod -Uri "https://api.ipify.org" -TimeoutSec 10
+              echo "PUBLIC_IP=$publicIP" >> $env:GITHUB_ENV
+              Write-Host "🌍 Public IP: $publicIP"
+          } catch {
+              Write-Host "⚠️ Could not get public IP"
+              echo "PUBLIC_IP=Unknown" >> $env:GITHUB_ENV
+          }
 
-      - name: Keep RDP Running
+      - name: Display Connection Info
         run: |
-          Write-Host "🖥️  RDP Server is running on: $env:PUBLIC_IP:3389"
-          Write-Host "👤 Username: SIFODZ"
-          Write-Host "🔑 Password: Sifodz@2024!"
-          Write-Host "⏰ Will run for 7 days"
+          Write-Host ""
+          Write-Host "🎯 ==================== RDP READY ===================="
+          Write-Host "👤 Username: $env:RDP_USER"
+          Write-Host "🔑 Password: $env:RDP_PASSWORD"
+          Write-Host "🌐 Public IP: $env:PUBLIC_IP"
+          Write-Host "🔌 Port: 3389"
+          Write-Host "⏰ Duration: 7 DAYS"
+          Write-Host "💡 Connection String: $env:PUBLIC_IP:3389"
+          Write-Host "==================================================="
+          Write-Host ""
+
+      - name: Keep System Active
+        run: |
+          $startTime = Get-Date
+          Write-Host "🔄 RDP Server is running and active..."
+          
           while ($true) {
-              Write-Host "[$(Get-Date)] RDP Active - IP: $env:PUBLIC_IP"
+              $currentTime = Get-Date
+              $elapsed = $currentTime - $startTime
+              $hours = [math]::Round($elapsed.TotalHours, 1)
+              
+              # التحقق من حالة خدمات RDP
+              $termService = Get-Service -Name TermService
+              $remoteDesktop = Get-Service -Name "UmRdpService" -ErrorAction SilentlyContinue
+              
+              if ($termService.Status -ne 'Running') {
+                  Write-Host "🔄 Restarting Terminal Services..."
+                  Start-Service -Name TermService
+              }
+              
+              Write-Host "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] RDP Active - Running: $hours hours"
+              Write-Host "   Username: $env:RDP_USER | Password: $env:RDP_PASSWORD"
+              
+              # الانتظار 5 دقائق
               Start-Sleep -Seconds 300
           }
