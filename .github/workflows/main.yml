@@ -1,0 +1,44 @@
+name: RDP
+on:
+  workflow_dispatch:
+jobs:
+  secure-rdp:
+    runs-on: windows-latest
+    timeout-minutes: 10080
+    steps:
+      - name: Configure RDP Settings
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
+          netsh advfirewall firewall set rule group="remote desktop" new enable=Yes
+          Restart-Service -Name TermService -Force
+
+      - name: Create User Account
+        run: |
+          $password = "Sifodz@2024!"
+          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+          Remove-LocalUser -Name "SIFODZ" -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+          New-LocalUser -Name "SIFODZ" -Password $securePass -AccountNeverExpires
+          Add-LocalGroupMember -Group "Administrators" -Member "SIFODZ"
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "SIFODZ"
+          Enable-LocalUser -Name "SIFODZ"
+          echo "RDP_CREDS=User: SIFODZ | Password: $password" >> $env:GITHUB_ENV
+
+      - name: Get Connection Info
+        run: |
+          $ip = Invoke-RestMethod -Uri "https://api.ipify.org" -TimeoutSec 10
+          echo "PUBLIC_IP=$ip" >> $env:GITHUB_ENV
+          Write-Host "✅ RDP Ready - IP: $ip - Username: SIFODZ - Password: Sifodz@2024!"
+
+      - name: Keep RDP Running
+        run: |
+          Write-Host "🖥️  RDP Server is running on: $env:PUBLIC_IP:3389"
+          Write-Host "👤 Username: SIFODZ"
+          Write-Host "🔑 Password: Sifodz@2024!"
+          Write-Host "⏰ Will run for 7 days"
+          while ($true) {
+              Write-Host "[$(Get-Date)] RDP Active - IP: $env:PUBLIC_IP"
+              Start-Sleep -Seconds 300
+          }
